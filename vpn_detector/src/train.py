@@ -12,7 +12,7 @@ from sklearn.metrics import f1_score
 from . import data_io, features
 from .checks import run_checks
 from .models import train_logreg, train_random_forest, train_xgboost
-from .splits import group_stratified_split, save_splits
+from .splits import group_stratified_split, save_splits, load_splits
 
 
 def load_config(path: str) -> Dict:
@@ -44,11 +44,21 @@ def optimize_threshold(y_true: np.ndarray, y_scores: np.ndarray, metric: str = "
 
 def _train_val_test_split(df: pd.DataFrame, config: Dict):
     X_raw, y, groups = data_io.prepare_features(df, config)
-    split_idx = group_stratified_split(
-        X_raw, y, groups, test_size=config["split"]["test_size"], val_size=config["split"]["val_size"], random_state=config["split"]["random_state"]
-    )
-    save_splits(split_idx, Path("artifacts/datasets/splits.json"))
-    print("[train] Saved splits to artifacts/datasets/splits.json")
+    splits_path = Path("artifacts/datasets/splits.json")
+    if splits_path.exists():
+        split_idx = load_splits(splits_path)
+        print("[train] Loaded existing splits from artifacts/datasets/splits.json")
+    else:
+        split_idx = group_stratified_split(
+            X_raw,
+            y,
+            groups,
+            test_size=config["split"]["test_size"],
+            val_size=config["split"]["val_size"],
+            random_state=config["split"]["random_state"],
+        )
+        save_splits(split_idx, splits_path)
+        print("[train] Saved splits to artifacts/datasets/splits.json")
 
     X_train = X_raw.iloc[split_idx["train"]]
     y_train = y.iloc[split_idx["train"]]

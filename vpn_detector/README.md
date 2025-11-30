@@ -62,3 +62,4 @@ Artifacts:
 - If class imbalance exceeds 4:1, training switches to `average_precision` scoring while still reporting F1/Recall.
 - Thresholds are optimized on validation predictions for the chosen metric (default F1) and applied to test scores.
 - Current snapshot (VNAT, grouped split): XGB/RF near-perfect ROC/PR and high recall; baseline LogReg lags (PR AUC ~0.46, F1 ~0.59), indicating nonlinear signal. For trust, consider per-capture metrics or holding out entire captures as a final test.
+- Training reuses the same saved splits if `artifacts/datasets/splits.json` exists, so RF/XGB/LogReg are always compared on identical train/val/test partitions. Delete that file if you need a fresh split.
