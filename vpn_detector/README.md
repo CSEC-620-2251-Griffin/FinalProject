@@ -1,6 +1,6 @@
 ## VPN Detector
 
-End-to-end pipeline to preprocess the MIT LL VNAT traffic captures, build flow-level features, and train Random Forest and XGBoost models to distinguish VPN vs non-VPN traffic. All steps are reproducible via a YAML config and CLI entrypoints.
+End-to-end pipeline to preprocess MIT LL VNAT traffic captures, build flow-level features, and train/evaluate VPN vs non-VPN models (Random Forest, XGBoost, baseline Logistic Regression). All steps are reproducible via `config.yaml` and the CLI entrypoints.
 
 ### Project layout
 ```
@@ -13,8 +13,8 @@ vpn_detector/
     checks.py       # sanity checks, imbalance, correlations
     features.py     # feature engineering hooks
     splits.py       # group-aware stratified splits
-    models.py       # model builders + search CV
-    train.py        # orchestrate training, save models
+    models.py       # model builders + search CV (RF/XGB/LogReg baseline)
+    train.py        # orchestrate training, save models + thresholds
     evaluate.py     # test metrics, threshold tuning, plots
     plots.py        # plotting utilities
     cli.py          # CLI to run pipeline steps
@@ -26,7 +26,7 @@ vpn_detector/
 ```
 
 ### Dataset
-Set `data.raw_dir` in `config.yaml` to the VNAT root (default `/home/t/Downloads/Code/MLFINAL`). The preprocessor searches for `.pcap`, `.hdf5`, or `.csv` files recursively. Labels and capture IDs are derived from filenames (case-insensitive match on `vpn`).
+Set `data.raw_dir` in `config.yaml` to the VNAT root (default `/home/t/Downloads/Code/MLFINAL`). The preprocessor searches for `.pcap`, `.hdf5`, or `.csv` files recursively. Labels and capture IDs are derived from filenames (case-insensitive match on `vpn`). The processed path is absolute to reuse the cached Parquet.
 
 ### Setup
 ```bash
@@ -53,11 +53,12 @@ python -m vpn_detector.src.cli eval --config config.yaml
 
 Artifacts:
 - `artifacts/datasets/flows.parquet` cached flow dataset
-- `artifacts/models/best_rf.joblib`, `best_xgb.joblib`
+- `artifacts/models/best_rf.joblib`, `best_xgb.joblib`, `best_logreg.joblib`, `preprocess.joblib`, `thresholds.json`
 - `artifacts/reports/report.md`, `env.txt`
-- `artifacts/figures/*` (ROC/PR/calibration/importance/correlation)
+- `artifacts/figures/*` (ROC/PR/calibration/importance/correlation/confusion per model)
 
 ### Notes
 - Group-aware splits prevent capture leakage (`capture_id` stays unique per split).
 - If class imbalance exceeds 4:1, training switches to `average_precision` scoring while still reporting F1/Recall.
 - Thresholds are optimized on validation predictions for the chosen metric (default F1) and applied to test scores.
+- Current snapshot (VNAT, grouped split): XGB/RF near-perfect ROC/PR and high recall; baseline LogReg lags (PR AUC ~0.46, F1 ~0.59), indicating nonlinear signal. For trust, consider per-capture metrics or holding out entire captures as a final test.
