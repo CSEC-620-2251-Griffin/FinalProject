@@ -19,7 +19,15 @@ from sklearn.metrics import (
 )
 
 from . import data_io
-from .plots import plot_calibration, plot_confusion, plot_feature_importance, plot_pr, plot_roc
+from .plots import (
+    plot_calibration,
+    plot_confusion,
+    plot_feature_importance,
+    plot_per_capture_bar,
+    plot_pr,
+    plot_roc,
+    plot_score_hist,
+)
 from .splits import load_splits
 
 
@@ -71,6 +79,53 @@ def load_preprocess_artifacts():
     return artifacts["encoder"], artifacts["imputer"], artifacts["feature_names"]
 
 
+def per_capture_report(
+    model_name: str,
+    y_true: pd.Series,
+    y_prob: np.ndarray,
+    y_pred: np.ndarray,
+    captures: pd.Series,
+) -> pd.DataFrame:
+    rows = []
+    for cap in sorted(captures.unique()):
+        mask = captures == cap
+        yt = y_true[mask]
+        yp = y_pred[mask]
+        prob_cap = y_prob[mask]
+        tp = int(((yp == 1) & (yt == 1)).sum())
+        fp = int(((yp == 1) & (yt == 0)).sum())
+        fn = int(((yp == 0) & (yt == 1)).sum())
+        tn = int(((yp == 0) & (yt == 0)).sum())
+        pos = int(yt.sum())
+        neg = int((yt == 0).sum())
+        recall = tp / pos if pos > 0 else 0.0
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        fpr = fp / neg if neg > 0 else np.nan
+        rows.append(
+            {
+                "capture_id": cap,
+                "n": int(mask.sum()),
+                "pos": pos,
+                "neg": neg,
+                "accuracy": float((yp == yt).mean()),
+                "recall": float(recall),
+                "precision": float(precision),
+                "fpr": fpr,
+                "tp": tp,
+                "fp": fp,
+                "fn": fn,
+                "tn": tn,
+                "avg_score": float(prob_cap.mean()),
+            }
+        )
+    df = pd.DataFrame(rows)
+    csv_path = Path(f"artifacts/reports/per_capture_{model_name}.csv")
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(csv_path, index=False)
+    print(f"[eval] Per-capture metrics saved to {csv_path}")
+    return df
+
+
 def evaluate(config_path: str) -> Dict:
     ensure_dirs()
     config = load_config(config_path)
@@ -118,13 +173,15 @@ def evaluate(config_path: str) -> Dict:
         rf = joblib.load("artifacts/models/best_rf.joblib")
         rf_prob = rf.predict_proba(X_test)[:, 1]
         thr = thresholds.get("rf", 0.5)
+        rf_pred = (rf_prob >= thr).astype(int)
         rf_metrics = compute_metrics(y_test.values, rf_prob, thr, pos_label=config["imbalance"]["positive_label"])
         metrics_all["rf"] = rf_metrics
         print(f"[eval] RF metrics: {rf_metrics}")
         plot_roc(y_test, rf_prob, Path("artifacts/figures/roc_rf.png"), label="RandomForest")
         plot_pr(y_test, rf_prob, Path("artifacts/figures/pr_rf.png"), label="RandomForest")
         plot_calibration(y_test, rf_prob, Path("artifacts/figures/calibration_rf.png"))
-        plot_confusion(y_test, (rf_prob >= thr).astype(int), Path("artifacts/figures/confusion_rf.png"))
+        plot_confusion(y_test, rf_pred, Path("artifacts/figures/confusion_rf.png"))
+        plot_score_hist(y_test.values, rf_prob, Path("artifacts/figures/scores_rf.png"))
         if hasattr(rf, "feature_importances_"):
             importances = rf.feature_importances_
             plot_feature_importance(
@@ -133,18 +190,43 @@ def evaluate(config_path: str) -> Dict:
             top_idx = np.argsort(importances)[::-1][:20]
             top_feats = [(feature_names[i], float(importances[i])) for i in top_idx]
             print("[eval] RF top 20 importances:", top_feats)
+        rf_pc = per_capture_report("rf", y_test, rf_prob, rf_pred, g_test)
+        vpn_caps = rf_pc[rf_pc["pos"] > 0]
+        nonvpn_caps = rf_pc[rf_pc["pos"] == 0]
+        if not vpn_caps.empty:
+            plot_per_capture_bar(
+                vpn_caps["capture_id"].astype(str).tolist(),
+                vpn_caps["recall"].tolist(),
+                vpn_caps["n"].tolist(),
+                Path("artifacts/figures/per_capture_recall_rf.png"),
+                "RF Recall by VPN Capture",
+                "Recall",
+            )
+        if not nonvpn_caps.empty:
+            # For non-VPN captures, surface false positive rate
+            fpr_vals = [v if not np.isnan(v) else 0.0 for v in nonvpn_caps["fpr"].tolist()]
+            plot_per_capture_bar(
+                nonvpn_caps["capture_id"].astype(str).tolist(),
+                fpr_vals,
+                nonvpn_caps["n"].tolist(),
+                Path("artifacts/figures/per_capture_fpr_rf.png"),
+                "RF False Positive Rate by Non-VPN Capture",
+                "FPR",
+            )
 
     if Path("artifacts/models/best_xgb.joblib").exists():
         xgb = joblib.load("artifacts/models/best_xgb.joblib")
         xgb_prob = xgb.predict_proba(X_test)[:, 1]
         thr = thresholds.get("xgb", 0.5)
+        xgb_pred = (xgb_prob >= thr).astype(int)
         xgb_metrics = compute_metrics(y_test.values, xgb_prob, thr, pos_label=config["imbalance"]["positive_label"])
         metrics_all["xgb"] = xgb_metrics
         print(f"[eval] XGB metrics: {xgb_metrics}")
         plot_roc(y_test, xgb_prob, Path("artifacts/figures/roc_xgb.png"), label="XGBoost")
         plot_pr(y_test, xgb_prob, Path("artifacts/figures/pr_xgb.png"), label="XGBoost")
         plot_calibration(y_test, xgb_prob, Path("artifacts/figures/calibration_xgb.png"))
-        plot_confusion(y_test, (xgb_prob >= thr).astype(int), Path("artifacts/figures/confusion_xgb.png"))
+        plot_confusion(y_test, xgb_pred, Path("artifacts/figures/confusion_xgb.png"))
+        plot_score_hist(y_test.values, xgb_prob, Path("artifacts/figures/scores_xgb.png"))
         if hasattr(xgb, "feature_importances_"):
             importances = xgb.feature_importances_
             plot_feature_importance(
@@ -153,18 +235,64 @@ def evaluate(config_path: str) -> Dict:
             top_idx = np.argsort(importances)[::-1][:20]
             top_feats = [(feature_names[i], float(importances[i])) for i in top_idx]
             print("[eval] XGB top 20 importances:", top_feats)
+        xgb_pc = per_capture_report("xgb", y_test, xgb_prob, xgb_pred, g_test)
+        vpn_caps = xgb_pc[xgb_pc["pos"] > 0]
+        nonvpn_caps = xgb_pc[xgb_pc["pos"] == 0]
+        if not vpn_caps.empty:
+            plot_per_capture_bar(
+                vpn_caps["capture_id"].astype(str).tolist(),
+                vpn_caps["recall"].tolist(),
+                vpn_caps["n"].tolist(),
+                Path("artifacts/figures/per_capture_recall_xgb.png"),
+                "XGB Recall by VPN Capture",
+                "Recall",
+            )
+        if not nonvpn_caps.empty:
+            fpr_vals = [v if not np.isnan(v) else 0.0 for v in nonvpn_caps["fpr"].tolist()]
+            plot_per_capture_bar(
+                nonvpn_caps["capture_id"].astype(str).tolist(),
+                fpr_vals,
+                nonvpn_caps["n"].tolist(),
+                Path("artifacts/figures/per_capture_fpr_xgb.png"),
+                "XGB False Positive Rate by Non-VPN Capture",
+                "FPR",
+            )
 
     if Path("artifacts/models/best_logreg.joblib").exists():
         logreg = joblib.load("artifacts/models/best_logreg.joblib")
         logreg_prob = logreg.predict_proba(X_test)[:, 1]
         thr = thresholds.get("logreg", 0.5)
+        logreg_pred = (logreg_prob >= thr).astype(int)
         logreg_metrics = compute_metrics(y_test.values, logreg_prob, thr, pos_label=config["imbalance"]["positive_label"])
         metrics_all["logreg"] = logreg_metrics
         print(f"[eval] LogReg metrics: {logreg_metrics}")
         plot_roc(y_test, logreg_prob, Path("artifacts/figures/roc_logreg.png"), label="LogReg")
         plot_pr(y_test, logreg_prob, Path("artifacts/figures/pr_logreg.png"), label="LogReg")
         plot_calibration(y_test, logreg_prob, Path("artifacts/figures/calibration_logreg.png"))
-        plot_confusion(y_test, (logreg_prob >= thr).astype(int), Path("artifacts/figures/confusion_logreg.png"))
+        plot_confusion(y_test, logreg_pred, Path("artifacts/figures/confusion_logreg.png"))
+        plot_score_hist(y_test.values, logreg_prob, Path("artifacts/figures/scores_logreg.png"))
+        log_pc = per_capture_report("logreg", y_test, logreg_prob, logreg_pred, g_test)
+        vpn_caps = log_pc[log_pc["pos"] > 0]
+        nonvpn_caps = log_pc[log_pc["pos"] == 0]
+        if not vpn_caps.empty:
+            plot_per_capture_bar(
+                vpn_caps["capture_id"].astype(str).tolist(),
+                vpn_caps["recall"].tolist(),
+                vpn_caps["n"].tolist(),
+                Path("artifacts/figures/per_capture_recall_logreg.png"),
+                "LogReg Recall by VPN Capture",
+                "Recall",
+            )
+        if not nonvpn_caps.empty:
+            fpr_vals = [v if not np.isnan(v) else 0.0 for v in nonvpn_caps["fpr"].tolist()]
+            plot_per_capture_bar(
+                nonvpn_caps["capture_id"].astype(str).tolist(),
+                fpr_vals,
+                nonvpn_caps["n"].tolist(),
+                Path("artifacts/figures/per_capture_fpr_logreg.png"),
+                "LogReg False Positive Rate by Non-VPN Capture",
+                "FPR",
+            )
 
     report_path = Path("artifacts/reports/report.md")
     with report_path.open("w") as f:

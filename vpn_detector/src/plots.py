@@ -68,3 +68,41 @@ def plot_feature_importance(importances, feature_names: List[str], path: Path, t
     path.parent.mkdir(parents=True, exist_ok=True)
     plt.savefig(path, dpi=200)
     plt.close()
+
+
+def plot_per_capture_bar(capture_ids: List[str], values: List[float], counts: List[int], path: Path, title: str, metric_label: str) -> None:
+    # Sort by metric to highlight weakest captures
+    order = np.argsort(values)
+    ids_sorted = [capture_ids[i] for i in order]
+    vals_sorted = [values[i] for i in order]
+    counts_sorted = [counts[i] for i in order]
+
+    plt.figure(figsize=(10, max(4, len(ids_sorted) * 0.2)))
+    bars = plt.barh(range(len(ids_sorted)), vals_sorted, color="#1f77b4")
+    plt.yticks(range(len(ids_sorted)), ids_sorted)
+    plt.xlabel(metric_label)
+    plt.title(title)
+    # annotate support on bars
+    for idx, (bar, cnt) in enumerate(zip(bars, counts_sorted)):
+        plt.text(bar.get_width() + 0.01, bar.get_y() + bar.get_height() / 2, f"n={cnt}", va="center", fontsize=8)
+    plt.xlim(0, 1.05)
+    plt.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path, dpi=200)
+    plt.close()
+
+
+def plot_score_hist(y_true, y_score, path: Path, bins: int = 30) -> None:
+    """Overlay score distributions for negatives vs positives."""
+    y_true = np.asarray(y_true)
+    plt.figure(figsize=(8, 4))
+    plt.hist(y_score[y_true == 0], bins=bins, alpha=0.6, label="Non-VPN", color="#1f77b4", density=True)
+    plt.hist(y_score[y_true == 1], bins=bins, alpha=0.6, label="VPN", color="#d62728", density=True)
+    plt.xlabel("Predicted probability")
+    plt.ylabel("Density")
+    plt.title("Score Distribution")
+    plt.legend()
+    plt.tight_layout()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path, dpi=200)
+    plt.close()

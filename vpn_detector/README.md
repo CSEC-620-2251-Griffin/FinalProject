@@ -54,8 +54,8 @@ python -m vpn_detector.src.cli eval --config config.yaml
 Artifacts:
 - `artifacts/datasets/flows.parquet` cached flow dataset
 - `artifacts/models/best_rf.joblib`, `best_xgb.joblib`, `best_logreg.joblib`, `preprocess.joblib`, `thresholds.json`
-- `artifacts/reports/report.md`, `env.txt`
-- `artifacts/figures/*` (ROC/PR/calibration/importance/correlation/confusion per model)
+- `artifacts/reports/report.md`, `env.txt`, per-capture CSVs per model
+- `artifacts/figures/*` (ROC/PR/calibration/importance/confusion per model, feature importances, score histograms, per-capture recall for VPN captures, per-capture FPR for non-VPN captures)
 
 ### Notes
 - Group-aware splits prevent capture leakage (`capture_id` stays unique per split).
