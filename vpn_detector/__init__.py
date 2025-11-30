@@ -1,0 +1,3 @@
+"""
+VPN detector package initialization.
+"""
