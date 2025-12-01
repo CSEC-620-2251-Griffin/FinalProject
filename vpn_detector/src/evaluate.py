@@ -6,7 +6,6 @@ from typing import Dict, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-import yaml
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
@@ -19,6 +18,7 @@ from sklearn.metrics import (
 )
 
 from . import data_io
+from .config_utils import load_config
 from .plots import (
     plot_calibration,
     plot_confusion,
@@ -29,11 +29,6 @@ from .plots import (
     plot_score_hist,
 )
 from .splits import load_splits
-
-
-def load_config(path: str) -> Dict:
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
 
 
 def ensure_dirs() -> None:

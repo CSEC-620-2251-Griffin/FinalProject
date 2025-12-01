@@ -5,19 +5,14 @@ from typing import Dict, Tuple
 import joblib
 import numpy as np
 import pandas as pd
-import yaml
 from sklearn.model_selection import GroupShuffleSplit, train_test_split
 from sklearn.metrics import f1_score
 
 from . import data_io, features
 from .checks import run_checks
+from .config_utils import load_config
 from .models import train_logreg, train_random_forest, train_xgboost
 from .splits import group_stratified_split, save_splits, load_splits
-
-
-def load_config(path: str) -> Dict:
-    with open(path, "r") as f:
-        return yaml.safe_load(f)
 
 
 def ensure_dirs() -> None:

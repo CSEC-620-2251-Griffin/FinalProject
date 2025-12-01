@@ -26,7 +26,7 @@ vpn_detector/
 ```
 
 ### Dataset
-Set `data.raw_dir` in `config.yaml` to the VNAT root (default `/home/t/Downloads/Code/MLFINAL`). The preprocessor searches for `.pcap`, `.hdf5`, or `.csv` files recursively. Labels and capture IDs are derived from filenames (case-insensitive match on `vpn`). The processed path is absolute to reuse the cached Parquet.
+Set `data.raw_dir` in `config.yaml` to the VNAT root (defaults to `../VNAT_release_1` relative to the config file). Paths can be relative or `~`; they are resolved against the config location at runtime so the repo stays portable. The preprocessor searches for `.pcap`, `.hdf5`, or `.csv` files recursively. Labels and capture IDs are derived from filenames (case-insensitive match on `vpn`). The processed path is resolved to an absolute location to reuse the cached Parquet.
 
 ### Setup
 ```bash

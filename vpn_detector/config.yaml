@@ -1,6 +1,6 @@
 data:
-  raw_dir: "/home/t/Downloads/Code/MLFINAL"
-  processed_path: "/home/t/Downloads/Code/MLFINAL/artifacts/datasets/flows.parquet"
+  raw_dir: "../VNAT_release_1"
+  processed_path: "../artifacts/datasets/flows.parquet"
   id_col: "flow_id"
   label_col: "label"
   group_col: "capture_id"

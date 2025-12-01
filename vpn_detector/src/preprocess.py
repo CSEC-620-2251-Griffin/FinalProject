@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+from .config_utils import load_config
+
 
 def find_data_files(raw_dir: Path) -> List[Path]:
     patterns = ["**/*.pcap", "**/*.pcapng", "**/*.csv", "**/*.hdf5", "**/*.h5"]
@@ -262,10 +264,7 @@ def preprocess(config: Dict) -> Path:
 
 
 def main(config_path: str) -> None:
-    import yaml
-
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
+    config = load_config(config_path)
     preprocess(config)
 
 
