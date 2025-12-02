@@ -68,6 +68,30 @@ def _train_val_test_split(df: pd.DataFrame, config: Dict):
     g_test = groups.iloc[split_idx["test"]]
     return (X_train, y_train, g_train), (X_val, y_val, g_val), (X_test, y_test, g_test)
 
+def _oversample_training(
+    X_train: pd.DataFrame, y_train: pd.Series, g_train: pd.Series, target_pos_to_neg: float, random_state: int
+) -> Tuple[pd.DataFrame, pd.Series, pd.Series]:
+    """
+    Oversample positive class in the training fold to reach the requested pos:neg ratio.
+    Validation/test remain untouched to keep evaluation honest.
+    """
+    pos_mask = y_train == 1
+    pos = int(pos_mask.sum())
+    neg = int((~pos_mask).sum())
+    if pos == 0 or target_pos_to_neg <= 0:
+        return X_train, y_train, g_train
+    desired_pos = int(np.ceil(neg * target_pos_to_neg))
+    if desired_pos <= pos:
+        return X_train, y_train, g_train
+
+    rng = np.random.default_rng(random_state)
+    pos_indices = y_train[pos_mask].index.to_numpy()
+    sample_indices = rng.choice(pos_indices, size=desired_pos - pos, replace=True)
+    X_aug = pd.concat([X_train, X_train.loc[sample_indices]], axis=0)
+    y_aug = pd.concat([y_train, y_train.loc[sample_indices]], axis=0)
+    g_aug = pd.concat([g_train, g_train.loc[sample_indices]], axis=0)
+    return X_aug.reset_index(drop=True), y_aug.reset_index(drop=True), g_aug.reset_index(drop=True)
+
 
 def _prepare_encodings(train_df, val_df, test_df, config):
     encoder = features.FeatureEncoder()
@@ -93,6 +117,13 @@ def train_models(config_path: str) -> Dict:
     (X_train_raw, y_train, g_train), (X_val_raw, y_val, g_val), (X_test_raw, y_test, g_test) = _train_val_test_split(
         df, config
     )
+    sampling_cfg = config.get("sampling", {})
+    if sampling_cfg.get("oversample_train", False):
+        target_ratio = float(sampling_cfg.get("target_pos_to_neg_ratio", 0.5))
+        X_train_raw, y_train, g_train = _oversample_training(
+            X_train_raw, y_train, g_train, target_pos_to_neg=target_ratio, random_state=config["split"]["random_state"]
+        )
+
     X_train, X_val, X_test, encoder, imputer = _prepare_encodings(X_train_raw, X_val_raw, X_test_raw, config)
 
     pos = int((y_train == config["imbalance"]["positive_label"]).sum())

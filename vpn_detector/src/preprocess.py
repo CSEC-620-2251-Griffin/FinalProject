@@ -205,7 +205,6 @@ def aggregate_flows(df: pd.DataFrame, file_path: Path, label: int, capture_id: s
             "pkt_rate": len(g) / duration,
             "byte_rate": g["length"].sum() / duration,
             "direction_ratio": bytes_up / (bytes_down + 1e-6),
-            "tls_record_count": int(g["tls_flag"].sum()),
             "label": label,
             "capture_id": capture_id,
             "file_name": file_path.name,

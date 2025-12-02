@@ -26,7 +26,10 @@ vpn_detector/
 ```
 
 ### Dataset
-Set `data.raw_dir` in `config.yaml` to the VNAT root (defaults to `../VNAT_release_1` relative to the config file). Paths can be relative or `~`; they are resolved against the config location at runtime so the repo stays portable. The preprocessor searches for `.pcap`, `.hdf5`, or `.csv` files recursively. Labels and capture IDs are derived from filenames (case-insensitive match on `vpn`). The processed path is resolved to an absolute location to reuse the cached Parquet.
+Set `data.raw_dir` in `config.yaml` to the VNAT root (defaults to `../VNAT_release_1` relative to the config file). Paths can be relative or `~`; they are resolved against the config location at runtime so the repo stays portable. The preprocessor searches for `.pcap`, `.hdf5`, or `.csv` files recursively. Labels and capture IDs are derived from filenames (case-insensitive match on `vpn`). The processed path is resolved to an absolute location to reuse the cached Parquet. Ports, IPs, proto, TLS record counts, and file names are dropped by default in `config.yaml` to avoid “cheaty” separation on dataset-specific endpoints; adjust `drop_cols` if you want them back.
+
+### Sampling / imbalance
+`config.yaml` includes a `sampling` block. By default `oversample_train: true` with `target_pos_to_neg_ratio: 0.5` (aims for roughly 1:2 pos:neg) to counter the heavy VPN imbalance during training. Validation/test remain untouched so metrics stay representative. Disable oversampling by setting `oversample_train: false` or tweak the ratio as needed.
 
 ### Setup
 ```bash
